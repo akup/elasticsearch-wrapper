@@ -9,11 +9,11 @@ case class AnalysisSettings(charFilters: Seq[AbstractCharacterFilter] = Nil,
                             analyzers: Seq[AbstractAnalizer] = Nil) {
   def toJsonField: JField = {
     val analysisJFields =
-      (if (charFilters.isEmpty) Nil else JField("char_filter", charFilters.map(_.toJsonField)) :: Nil) :::
-        (if (tokenizers.isEmpty) Nil else JField("tokenizer", tokenizers.map(_.toJsonField)) :: Nil) :::
-        (if (filters.isEmpty) Nil else JField("filter", filters.map(_.toJsonField)) :: Nil) :::
-        (if (normalizers.isEmpty) Nil else JField("normalizer", normalizers.map(_.toJsonField)) :: Nil) :::
-        (if (analyzers.isEmpty) Nil else JField("analyzer", analyzers.map(_.toJsonField)) :: Nil)
+      (if (charFilters.isEmpty) Nil else JField("char_filter", JObject(charFilters.map(_.toJsonField))) :: Nil) :::
+        (if (tokenizers.isEmpty) Nil else JField("tokenizer", JObject(tokenizers.map(_.toJsonField))) :: Nil) :::
+        (if (filters.isEmpty) Nil else JField("filter", JObject(filters.map(_.toJsonField))) :: Nil) :::
+        (if (normalizers.isEmpty) Nil else JField("normalizer", JObject(normalizers.map(_.toJsonField))) :: Nil) :::
+        (if (analyzers.isEmpty) Nil else JField("analyzer", JObject(analyzers.map(_.toJsonField))) :: Nil)
 
     JField("analysis", JObject(analysisJFields))
   }

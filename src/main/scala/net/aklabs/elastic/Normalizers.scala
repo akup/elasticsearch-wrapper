@@ -15,10 +15,10 @@ case class CustomNormalizer(normalizerName: String,
   def toJsonField: JField = {
     if (char_filter.isEmpty && filter.isEmpty)
       throw new Exception("char_filter or filter should not be empty")
-    JField(normalizerName, JObject(JField("type", JString(Normalizers.custom.toString)) ::
+    JField(normalizerName, JObject(JField("type", Normalizers.custom.toString) ::
       ( if (char_filter.isEmpty) Nil else
         JField("char_filter", JArray(char_filter.map(cf =>
-          JString( cf._1.map(_.toString).getOrElse(cf._2) )
+          cf._1.map(_.toString).getOrElse(cf._2)
         ))) :: Nil ) :::
       ( if (filter.isEmpty) Nil else
       JField("filter", JArray(filter.map(f =>

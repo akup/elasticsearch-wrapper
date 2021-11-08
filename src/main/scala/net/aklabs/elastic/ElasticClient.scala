@@ -253,17 +253,17 @@ object ElasticClient {
           JField("settings", JObject(
             (if (sortingSettings.nonEmpty)
               JField("index", JObject(
-                JField("sort.field", JArray(sortingSettings.map(el => JString(el._1)))) ::
-                  JField("sort.order", JArray(sortingSettings.map(el => JString(el._2.toString)))) :: Nil
+                ("sort.field" -> JArray(sortingSettings.map(el => el._1))) ::
+                  ("sort.order" -> JArray(sortingSettings.map(el => el._2.toString))) :: Nil
               )) :: Nil
             else Nil) :::
             as.toJsonField :: Nil
           )) :: Nil
         ).getOrElse(Nil) :::
           JField("mappings",
-            JObject(JField("properties", JObject(
+            JObject(("properties" -> JObject(
               mappings.map(_.toJsonField(analysisSettings.getOrElse(AnalysisSettings())))
-            )) :: dynamicMapping.map(d => JField("dynamic", JBool(d)) :: Nil).getOrElse(Nil))
+            )) :: dynamicMapping.map(d => "dynamic" -> JBool(d)).toList)
           ) :: Nil)
 
       Logger.debug("Create index:")
@@ -375,9 +375,9 @@ object ElasticClient {
       MappingsResponse(Map(indexName -> (deltaFrom, prevDynamic)), JNull())
     } else try {
       Logger.debug("Has something to update")
-      val requestData = JObject(JField("properties", JObject(
+      val requestData = JObject(("properties" -> JObject(
         updatedMappings.map(_.toJsonField(a_settings))
-      )) :: dynamicMapping.map(d => JField("dynamic", JBool(d)) :: Nil).getOrElse(Nil))
+      )) :: dynamicMapping.map(d => "dynamic" -> JBool(d)).toList)
 
       val putUrl = "%s/%s/_mapping".format(getNextHost, indexName)
       val response = Curl.execute(putUrl,
@@ -453,9 +453,10 @@ object ElasticClient {
         }))
 
         Seq(
-          JObject(JField("index", JObject(
-            JField("_index", JString(iName.get)) ::
-              JField("_id", JString(dId.get)) :: Nil)) :: Nil),
+          JObject("index" -> JObject(
+            "_index" -> iName.get,
+            "_id" -> dId.get
+          )),
           filteredDoc
         )
       })
@@ -477,13 +478,11 @@ object ElasticClient {
                     ): AbstractResponse = {
     val postUrl = "%s/%s/_update/%s".format(getNextHost, indexName, documentId)
 
-    val json = JObject(Seq(JField("script", JObject(Seq(
-      JField("source", JString(source.mkString("; "))),
-      JField("lang", JString(lang)),
-      JField("params", JObject(params.toSeq.map(kv => {
-        JField(kv._1, any2JValue(kv._2))
-      })))
-    )))))
+    val json = JObject(Seq(JField("script", JObject(
+      "source" -> source.mkString("; "),
+      "lang" -> lang,
+      "params" -> JObject(params.toSeq)
+    ))))
 
     Logger.debug("update document %s".format(postUrl))
     Logger.debug(json.toPrettyString)
@@ -542,54 +541,48 @@ object ElasticClient {
       throw new Exception("To get all sort field should be defined")
 
     val query_field = JField("query", JObject(
-      (if (matchAll) JField("match_all", JObject(Nil)) :: Nil
-      else JField("bool", JObject(
+      if (matchAll) "match_all" -> JObject(Nil)
+      else "bool" -> JObject(
         (if (must.nonEmpty)
-          JField("must", JArray(must.map(m => JObject(Seq(m.toJsonField))))) :: Nil
+          ("must" -> JArray(must.map(m => JObject(m.toJsonField)))) :: Nil
         else Nil) :::
           (if (filter.nonEmpty)
-            JField("filter", JArray(filter.map(m => JObject(Seq(m.toJsonField))))) :: Nil
+            ("filter" -> JArray(filter.map(m => JObject(m.toJsonField)))) :: Nil
           else Nil) :::
           (if (should.nonEmpty)
-            JField("should", JArray(should.map(m => JObject(Seq(m.toJsonField))))) :: Nil
+            ("should" -> JArray(should.map(m => JObject(m.toJsonField)))) :: Nil
           else Nil) :::
           (if (must_not.nonEmpty)
-            JField("must_not", JArray(must_not.map(m => JObject(Seq(m.toJsonField))))) :: Nil
+            ("must_not" -> JArray(must_not.map(m => JObject(m.toJsonField)))) :: Nil
           else Nil) :::
           Nil
-      )) :: Nil) ::: Nil
+      )
     ))
 
     val searchQuery = JObject(
-      JField("size", JInt(size)) ::
-      from.map(f => JField("from", JInt(f)) :: Nil).getOrElse(Nil) :::
-        (if (search_after.nonEmpty) JField("search_after", JArray(search_after.map(s =>
-          any2JValue(s)
-        ))) :: Nil else Nil) :::
-        sortByScript.map(sortByScript => {
-          JField("sort", JObject(Seq(JField("_script", JObject(Seq(
-            JField("type", JString(sortByScript._3)),
-            sortByScript._1.toJsonField,
-            JField("order", JString(sortByScript._2.toString))
-          )))))) :: Nil
-        }).getOrElse{
-          if (sortBy.nonEmpty) JField("sort", JArray(sortBy.map(s =>
-            JObject(Seq(JField(s._1, JString(s._2.toString))))
-          ))) :: Nil else Nil
-        } :::
-        (if (sourceFilters.nonEmpty)
-          JField("_source", JArray(sourceFilters.map(JString(_)))) :: Nil
-        else Nil) :::
-        (if (track_scores) JField("track_scores", JBool(true)) :: Nil
-        else Nil) :::
-        scoreScript.map(scoreScr => {
-          JField("query", JObject(Seq(
-            JField("script_score", JObject(Seq(
-              query_field,
-              scoreScr.toJsonField
-            )))
-          )))
-        }).getOrElse(query_field) :: Nil
+      ("size" -> size) ::
+      from.map(f => "from" -> f).toList :::
+      (if (search_after.nonEmpty) ("search_after" -> JArray(search_after)) :: Nil else Nil) :::
+
+      sortByScript.map(sortByScript => {
+        List("sort" -> JObject("_script" -> JObject(
+          JField("type", sortByScript._3),
+          sortByScript._1.toJsonField,
+          JField("order", sortByScript._2.toString)
+        )))
+      }).getOrElse{
+        if (sortBy.nonEmpty) ("sort" -> JArray(sortBy.map(s =>
+          JObject(s._1 -> JString(s._2.toString))
+        ))) :: Nil else Nil
+      } :::
+
+      (if (sourceFilters.nonEmpty) List("_source" -> JArray(sourceFilters)) else Nil) :::
+      (if (track_scores) List("track_scores" -> true) else Nil) :::
+      scoreScript.map(scoreScr => {
+        "query" -> JObject(
+          "script_score" -> JObject(query_field, scoreScr.toJsonField)
+        )
+      }).getOrElse(query_field.toTuple) :: Nil
     )
 
     Logger.debug(searchQuery)
@@ -813,19 +806,17 @@ object ElasticClient {
   def completion(indexName: String,
                  query: Seq[SuggestCompletionQuery], size: Int = 5,
                  contexts: Seq[(String, Seq[String])]): AbstractResponse = {
-    val request = JObject(Seq(JField("suggest", JObject(query.map(suggQ => {
-      JField(suggQ.suggesterId, JObject(Seq(
-        JField("prefix", JString(suggQ.query)),
-        JField("completion", JObject(
-          JField("field", JString(suggQ.field)) ::
-            JField("size", JInt(size)) ::
+    val request = JObject("suggest" -> JObject(query.map(suggQ => {
+      suggQ.suggesterId -> JObject(
+        "prefix" -> suggQ.query,
+        "completion" -> JObject(
+          ("field" -> suggQ.field) ::
+            ("size" -> size) ::
             (if (contexts.isEmpty) Nil
-            else JField("contexts", contexts.map(c => {
-              JField(c._1, JArray(c._2.map(JString(_))))
-            })) :: Nil)
-        ))
-      )))
-    })))))
+            else ("contexts" -> JObject(contexts.map(c => c._1 -> JArray(c._2))) :: Nil))
+        )
+      )
+    })))
 
     Logger.debug("completion request: " + indexName)
     Logger.debug(request.toString)
@@ -844,10 +835,10 @@ object ElasticClient {
 
   def analyze(indexName: String, analyzer: String, query: String): AbstractResponse = {
     val postUrl = "%s/%s/_analyze".format(getNextHost, indexName)
-    val request = JObject(Seq(
-      JField("analyzer", JString(analyzer)),
-      JField("text", JString(query))
-    ))
+    val request = JObject(
+      "analyzer" -> analyzer,
+      "text" -> query
+    )
     Logger.debug("analyze")
     Logger.debug(postUrl)
     Logger.debug(request.toString)
@@ -899,7 +890,7 @@ object ElasticClient {
       ) ++ fields.map(field =>
         new MatchPhraseQuery(None, field, query, boost = Some(1))
       ) ++ phonetic_tokens.map(_.flatMap(_._2.map(_.token)).mkString(" ")).map(tokensQ => {
-        if (tokensQ.length > 0) {
+        if (tokensQ.nonEmpty) {
           phoneticFields.map(field =>
             new MatchQuery(analyzer = Some("standard"), field, tokensQ,
               fuzziness = fuzziness.orElse{Some(0 -> true)},
@@ -1030,15 +1021,17 @@ object ElasticClient {
                   fuzziness = Some(0 -> false)
                 )
               ) else Nil) ++ (if (groupedTokens.size > 1 && !shouldFilter) fSeq else Nil),
-              must = (if (groupedTokens.isEmpty) Nil else Seq(new MultiMatchQuery(
-                analyzer = Some("standard"),
-                query = if (groupedTokens.size > 1)
-                  groupedTokens.last._2.map(_.token).mkString(" ")
-                else
-                  groupedTokens.head._2.map(_.token).mkString(" "),
-                fields = multiMatchFields.map(_._1),
-                fuzziness = Some(0 -> false)
-              ))) ++ seqCont.map(c => new BoolQuery(should = c._2 match {
+              must = (if (groupedTokens.isEmpty) Nil else Seq(
+                new MultiMatchQuery(
+                  analyzer = Some("standard"),
+                  query = if (groupedTokens.size > 1)
+                    groupedTokens.last._2.map(_.token).mkString(" ")
+                  else
+                    groupedTokens.head._2.map(_.token).mkString(" "),
+                  fields = multiMatchFields.map(_._1),
+                  fuzziness = Some(0 -> false)
+                )
+              )) ++ seqCont.map(c => new BoolQuery(should = c._2 match {
                 case s: Seq[_] => s.map(new TermQuery(c._1, _))
                 case s: Array[_] => s.toSeq.map(new TermQuery(c._1, _))
                 case _ => Nil

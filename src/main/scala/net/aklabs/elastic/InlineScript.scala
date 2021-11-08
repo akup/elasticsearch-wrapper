@@ -10,9 +10,9 @@ class ScriptObject(val lang: Option[String] = None, //painless
     if (source.isEmpty && id.isEmpty)
       throw new Exception("source or id should be defined")
     JField("script", JObject(
-      source.map(s => JField("source", JString(s)))
-        .getOrElse(JField("id", JString(id.get))) ::
-        lang.map(l => JField("lang", JString(l)) :: Nil).getOrElse(Nil) :::
+      source.map(s => JField("source", s))
+        .getOrElse(JField("id", id.get)) ::
+        lang.map(JField("lang", _)).toList :::
         ( if (params.isEmpty) Nil else JField("params", any2JValue(params, "params")) :: Nil )
     ))
   }
